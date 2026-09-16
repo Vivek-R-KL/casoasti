@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ASTI Quiz - One-Time Student Setup Tool</title>
+<style>
+  body { font-family: sans-serif; max-width: 800px; margin: 30px auto; padding: 0 20px; color: #111827; }
+  h1 { font-size: 22px; }
+  textarea { width: 100%; height: 220px; font-family: monospace; font-size: 14px; padding: 10px; box-sizing: border-box; }
+  button { margin-top: 12px; padding: 12px 20px; background: #10b981; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+  button:disabled { background: #9ca3af; cursor: not-allowed; }
+  #log { margin-top: 20px; font-family: monospace; font-size: 13px; white-space: pre-wrap; background: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 6px; max-height: 400px; overflow-y: auto; }
+  .warn { background: #fffbeb; border: 1px solid #fbbf24; padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+</style>
+</head>
+<body>
+
+<h1>📋 One-Time Student Setup Tool</h1>
+
+<div class="warn">
+  ⚠️ <strong>Only use this page yourself, once.</strong> Do not put this file on your public GitHub Pages site —
+  run it by opening it directly on your own computer (double-click the file, or drag it into your browser).
+  Delete it from your computer once you've finished adding all your students.
+</div>
+
+<p>
+  Paste one student per line, in this order, separated by commas:<br>
+  <code>username,password,full name,designation,section</code>
+</p>
+<p style="font-size:13px;color:#6b7280;">
+  Example:<br>
+  <code>123456,pass123,Rajesh Kumar,Constable,basic</code><br>
+  <code>789012,pass456,Sunita Sharma,Head Constable,advanced</code>
+</p>
+
+<textarea id="csvInput" placeholder="123456,pass123,Rajesh Kumar,Constable,basic"></textarea>
+<br>
+<button id="startBtn" onclick="runSetup()">Create All Accounts</button>
+
+<div id="log">Waiting to start…</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import {
+    getAuth,
+    createUserWithEmailAndPassword,
+    signOut
+  } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    setDoc
+  } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDVupXGnzWupC923PMdj592aDUFSZgCe80",
+    authDomain: "asti-quiz.firebaseapp.com",
+    projectId: "asti-quiz",
+    storageBucket: "asti-quiz.firebasestorage.app",
+    messagingSenderId: "581313433547",
+    appId: "1:581313433547:web:a8fb873eeda09649df704e",
+    measurementId: "G-NCMHQXB5Q0"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const logBox = document.getElementById('log');
+  const btn = document.getElementById('startBtn');
+
+  function log(msg) {
+    logBox.textContent += "\n" + msg;
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  window.runSetup = async function () {
+    const raw = document.getElementById('csvInput').value.trim();
+    if (!raw) { alert("Please paste your student list first."); return; }
+
+    const lines = raw.split("\n").map(l => l.trim()).filter(Boolean);
+    btn.disabled = true;
+    logBox.textContent = `Starting... ${lines.length} student(s) to create.`;
+
+    let success = 0, failed = 0;
+
+    for (const line of lines) {
+      const parts = line.split(",").map(p => p.trim());
+      const [username, password, name, designation, section] = parts;
+
+      if (!username || !password) {
+        log(`⚠️ Skipped a line (missing username or password): "${line}"`);
+        failed++;
+        continue;
+      }
+
+      const fakeEmail = username + "@astiquiz.local";
+
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, fakeEmail, password);
+        const uid = cred.user.uid;
+
+        await setDoc(doc(db, "students", uid), {
+          username: username,
+          name: name || "Trainee",
+          designation: designation || "",
+          section: (section || "basic").toLowerCase(),
+          activeSessionToken: ""
+        });
+
+        log(`✅ Created: ${username} (${name || "no name given"})`);
+        success++;
+      } catch (err) {
+        log(`❌ Failed for ${username}: ${err.message}`);
+        failed++;
+      }
+    }
+
+    await signOut(auth);
+    log(`\nDone. ${success} created, ${failed} failed.`);
+    btn.disabled = false;
+  };
+</script>
+
+</body>
+</html>
